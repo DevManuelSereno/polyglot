@@ -56,7 +56,7 @@ cp -r Polyglot ~/.claude/skills/polyglot
 
 > **Note:** The repository was originally named `i18n-migrator` but was renamed to `polyglot` to reflect the skill's broader scope (create, migrate, refactor).
 
-Works with Claude Code, opencode, and any Agent Skills-compatible tool.
+Works with Claude Code, opencode, and any Agent Skills-compatible tool. Optimized for Claude, GPT-4, Kimi, Qwen, Llama, and other major LLMs.
 
 ## Use
 
@@ -164,15 +164,54 @@ Every detection reports confidence:
 
 Low confidence → asks before proceeding. No bluffing.
 
-## Portability
+## LLM Compatibility
 
-Built on the [Agent Skills](https://agentskills.io) open standard. Works with:
-- Claude Code
-- opencode
-- Codex CLI
-- Cursor
-- Gemini CLI
-- Copilot
+### Optimized For
+This skill is designed to work effectively across different LLM architectures:
+
+**Large Context Models** (Claude, GPT-4, Kimi):
+- Full progressive disclosure with multiple supporting files
+- Complex routing logic with 3 modes
+- Detailed impact analysis for refactor mode
+
+**Efficient Models** (Qwen, Llama, Mistral):
+- Concise SKILL.md (193 lines) for minimal context usage
+- Clear phase-based workflow for step-by-step execution
+- Structured output format for consistent responses
+
+**All Models**:
+- Deterministic validation via `validate-keys.js` (no hallucination risk)
+- Explicit confidence levels to prevent overconfidence
+- Error handling table for predictable fallbacks
+
+### Model-Specific Notes
+
+| Model | Strengths | Considerations |
+|-------|-----------|----------------|
+| **Claude** | Long context, nuanced instructions | Full feature support |
+| **GPT-4** | Strong reasoning, tool use | Full feature support |
+| **Kimi** | 200K+ context window | Excellent for large codebases |
+| **Qwen** | Strong multilingual support | Ideal for i18n tasks |
+| **Llama** | Open source, customizable | May need explicit instructions |
+| **Mistral** | Fast inference | Good for quick migrations |
+
+### Why It Works Across Models
+
+1. **Clear structure** — Phase-based workflow is model-agnostic
+2. **Explicit rules** — No ambiguity in scope or behavior
+3. **Confidence reporting** — Prevents hallucination on any model
+4. **Validation script** — Deterministic checks don't depend on LLM quality
+5. **Examples** — Concrete before/after patterns work universally
+
+## Supported Agents & Tools
+
+Built on the [Agent Skills](https://agentskills.io) open standard:
+
+**Major Agents**: Claude Code, OpenAI Codex, Gemini CLI, GitHub Copilot, Cursor, VS Code
+
+**Emerging LLMs**: Kimi, Qwen, Llama, Mistral, DeepSeek, Yi
+
+**Other Tools**: opencode, Junie, OpenHands, Roo Code, Amp, TRAE, Kiro, and 30+ more — see [Client Showcase](https://agentskills.io/clients)
 
 No tool-specific dependencies. The validation script is plain Node.js.
 
