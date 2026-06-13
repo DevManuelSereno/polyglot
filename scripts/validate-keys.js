@@ -34,6 +34,16 @@ function flattenKeys(obj, prefix = '') {
   return keys;
 }
 
+function findLocalesDir() {
+  const candidates = ['locales', 'messages', 'i18n', 'lang', 'translations', 'public/locales'];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) {
+      return dir;
+    }
+  }
+  return null;
+}
+
 function validate(localesDir) {
   if (!fs.existsSync(localesDir)) {
     console.log(`Directory not found: ${localesDir}`);
@@ -113,7 +123,7 @@ function validate(localesDir) {
   console.log(`Files: ${files.length}, Keys: ${allKeyNames.size}\n`);
 
   if (errors.length > 0) {
-    console.log('❌ ERRORS:');
+    console.log(' ERRORS:');
     errors.forEach(e => console.log(`  ${e}`));
   }
 
@@ -132,10 +142,10 @@ function validate(localesDir) {
   }
 }
 
-const localesDir = process.argv[2];
+const localesDir = process.argv[2] || findLocalesDir();
 if (!localesDir) {
-  console.log('Usage: node validate-keys.js <locales-dir>');
-  process.exit(3);
+  console.log('No translation directories found (locales/, messages/, i18n/)');
+  process.exit(0);
 }
 
 validate(localesDir);

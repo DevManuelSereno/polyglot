@@ -1,8 +1,15 @@
 ---
 name: i18n-migrator
-description: Surgical i18n migration with minimal diffs. Migrates hardcoded strings to translation calls.
+description: >
+  Migrates hardcoded UI strings into i18n translation calls (t(), useTranslations,
+  $t, formatMessage) with minimal, surgical diffs. Use when the user asks to add
+  i18n, internationalize, localize, or migrate/extract hardcoded strings or text in
+  a component or file — across next-intl, react-i18next, vue-i18n, react-intl,
+  i18next, angular, svelte, or lingui. Does NOT set up i18n from scratch or refactor
+  existing i18n code.
 when_to_use: >
-  "add i18n", "migrate strings", "hardcoded text", "translate", "localize"
+  "add i18n", "migrate strings", "hardcoded text", "translate", "localize",
+  "i18n this component", "add translation keys"
 argument-hint: "[target] [reference]"
 arguments:
   - target
@@ -19,8 +26,11 @@ paths:
   - "**/messages/**"
   - "**/i18n/**"
 hooks:
-  post-invocation:
-    - command: "node ${CLAUDE_SKILL_DIR}/scripts/validate-keys.js $(find locales messages i18n -type d 2>/dev/null | head -1)"
+  PostToolUse:
+    - matcher: "Edit|Write|MultiEdit"
+      hooks:
+        - type: command
+          command: "node ${CLAUDE_SKILL_DIR}/scripts/validate-keys.js"
 ---
 
 # i18n Migrator
@@ -32,7 +42,9 @@ Surgical i18n migration. Make the minimum correct change. Consistency > optimiza
 ```!
 echo "=== i18n Detection ==="
 echo "Library:"
-grep -rE "useTranslation|useTranslations|useIntl|\$t\(|formatMessage" --include="*.{ts,tsx,js,jsx,vue,svelte}" -l 2>/dev/null | head -3 || echo "  Not found"
+grep -rE "useTranslation|useTranslations|useIntl|\$t\(|formatMessage" \
+  --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+  --include="*.vue" --include="*.svelte" -l 2>/dev/null | head -3 || echo "  Not found"
 echo "Files:"
 find locales messages i18n -name "*.json" -o -name "*.yaml" 2>/dev/null | head -5 || echo "  Not found"
 ```
