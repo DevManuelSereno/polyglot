@@ -6,10 +6,11 @@
  * - Missing keys across locales
  * - Empty values
  * - Duplicate keys (in nested structures)
- * - Unused keys (if source files provided)
+ * - Orphaned references (keys in code but not in translations, or vice versa)
  * 
- * Usage: node validate-keys.js <locales-dir>
- * Example: node validate-keys.js ./locales
+ * Usage: node validate-keys.js [locales-dir] [source-dir]
+ * Example: node validate-keys.js ./locales ./src
+ * Example: node validate-keys.js ./locales (source auto-detected)
  * 
  * Exit codes:
  * 0 = all valid
@@ -44,7 +45,87 @@ function findLocalesDir() {
   return null;
 }
 
-function validate(localesDir) {
+function findSourceDir() {
+  const candidates = ['src', 'app', 'components', 'pages', '.'];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir) && dir !== '.') {
+      return dir;
+    }
+  }
+  return '.';
+}
+
+function scanSourceFiles(sourceDir) {
+  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.vue', '.svelte'];
+  const ignoreDirs = ['node_modules', '.git', 'dist', 'build', '.next', 'coverage'];
+  const files = [];
+
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return;
+    
+    const items = fs.readdirSync(dir);
+    for (const item of items) {
+      const fullPath = path.join(dir, item);
+      const stat = fs.statSync(fullPath);
+      
+      if (stat.isDirectory()) {
+        if (!ignoreDirs.includes(item)) {
+          walk(fullPath);
+        }
+      } else if (stat.isFile()) {
+        const ext = path.extname(item);
+        if (extensions.includes(ext)) {
+          files.push(fullPath);
+        }
+      }
+    }
+  }
+
+  walk(sourceDir);
+  return files;
+}
+
+function extractI18nKeys(files) {
+  const keys = new Set();
+  const namespaces = new Set();
+  
+  // Patterns to match:
+  // t('key'), t("key"), t(`key`)
+  // $t('key'), $t("key"), $t(`key`)
+  // formatMessage({ id: 'key' }), formatMessage({id: "key"})
+  // useTranslations('namespace'), useTranslation('namespace')
+  const patterns = [
+    /\bt\(['"`]([^'"`]+)['"`]\)/g,
+    /\$t\(['"`]([^'"`]+)['"`]\)/g,
+    /formatMessage\(\s*\{\s*id:\s*['"`]([^'"`]+)['"`]/g,
+    /useTranslations?\(['"`]([^'"`]+)['"`]\)/g,
+  ];
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(file, 'utf8');
+      
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(content)) !== null) {
+          const key = match[1];
+          // Skip if it's a namespace (useTranslations/useTranslation)
+          if (pattern.source.includes('useTranslation')) {
+            namespaces.add(key);
+          } else {
+            keys.add(key);
+          }
+        }
+      }
+    } catch (err) {
+      // Skip files that can't be read
+    }
+  }
+
+  return { keys: Array.from(keys), namespaces: Array.from(namespaces) };
+}
+
+function validate(localesDir, sourceDir) {
   if (!fs.existsSync(localesDir)) {
     console.log(`Directory not found: ${localesDir}`);
     process.exit(3);
@@ -63,7 +144,7 @@ function validate(localesDir) {
   const errors = [];
   const warnings = [];
 
-  // Parse all files
+  // Parse all translation files
   for (const file of files) {
     const filePath = path.join(localesDir, file);
     try {
@@ -118,6 +199,40 @@ function validate(localesDir) {
     }
   }
 
+  // Check for orphaned references (if source directory exists)
+  if (sourceDir && fs.existsSync(sourceDir)) {
+    console.log(`\nScanning source files in: ${sourceDir}`);
+    const sourceFiles = scanSourceFiles(sourceDir);
+    console.log(`Found ${sourceFiles.length} source files`);
+    
+    if (sourceFiles.length > 0) {
+      const { keys: codeKeys, namespaces: codeNamespaces } = extractI18nKeys(sourceFiles);
+      console.log(`Found ${codeKeys.length} unique keys in code`);
+      console.log(`Found ${codeNamespaces.length} namespaces in code: ${codeNamespaces.join(', ') || 'none'}`);
+      
+      // Check for keys in code that don't exist in translations
+      for (const key of codeKeys) {
+        let found = false;
+        for (const keys of Object.values(allKeys)) {
+          if (key in keys) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          errors.push(`Code reference: Key "${key}" used in code but not found in any translation file`);
+        }
+      }
+      
+      // Check for keys in translations that are not used in code (orphaned translations)
+      for (const keyName of allKeyNames) {
+        if (!codeKeys.includes(keyName)) {
+          warnings.push(`Translation only: Key "${keyName}" exists in translations but not found in code`);
+        }
+      }
+    }
+  }
+
   // Report results
   console.log(`\nValidation: ${localesDir}`);
   console.log(`Files: ${files.length}, Keys: ${allKeyNames.size}\n`);
@@ -143,9 +258,11 @@ function validate(localesDir) {
 }
 
 const localesDir = process.argv[2] || findLocalesDir();
+const sourceDir = process.argv[3] || findSourceDir();
+
 if (!localesDir) {
   console.log('No translation directories found (locales/, messages/, i18n/)');
   process.exit(0);
 }
 
-validate(localesDir);
+validate(localesDir, sourceDir);
