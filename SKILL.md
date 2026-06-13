@@ -32,7 +32,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "node ${CLAUDE_SKILL_DIR}/scripts/validate-keys.js"
+          command: "node ${CLAUDE_SKILL_DIR:-.claude/skills/polyglot}/scripts/validate-keys.js"
 ---
 
 # Polyglot

@@ -188,12 +188,25 @@ This skill is designed to work effectively across different LLM architectures:
 
 | Model | Strengths | Considerations |
 |-------|-----------|----------------|
-| **Claude** | Long context, nuanced instructions | Full feature support |
+| **Claude** | Long context, nuanced instructions | Full feature support including hooks |
 | **GPT-4** | Strong reasoning, tool use | Full feature support |
-| **Kimi** | 200K+ context window | Excellent for large codebases |
-| **Qwen** | Strong multilingual support | Ideal for i18n tasks |
-| **Llama** | Open source, customizable | May need explicit instructions |
+| **Kimi** | 200K+ context window | Excellent for large codebases; verify hook support |
+| **Qwen** | Strong multilingual support | Ideal for i18n tasks; verify hook support |
+| **Llama** | Open source, customizable | May need explicit instructions; hook support varies |
 | **Mistral** | Fast inference | Good for quick migrations |
+
+### LLM Compatibility Notes
+
+**Hooks**: The `Stop` hook for automatic validation is fully supported in Claude Code. For other LLMs:
+- If hooks are supported: Validation runs automatically
+- If hooks are NOT supported: Run validation manually with:
+  ```bash
+  node ~/.claude/skills/polyglot/scripts/validate-keys.js
+  ```
+
+**Dynamic Context**: The `` !`command` `` syntax for auto-detection works in Claude Code and OpenAI Codex. For other LLMs, the skill will still work but may require manual context about your i18n setup.
+
+**Variable Fallback**: The skill uses `${CLAUDE_SKILL_DIR:-.claude/skills/polyglot}` to support agents that don't define `CLAUDE_SKILL_DIR`.
 
 ### Why It Works Across Models
 
