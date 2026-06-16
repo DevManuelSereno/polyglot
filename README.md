@@ -248,6 +248,44 @@ No tool-specific dependencies. The validation script is plain Node.js.
 
 **Large files (20+ strings)** — Proposes batching by section, asks for scope confirmation.
 
+## Recent Updates
+
+### v1.4.0 — Convention Detection (June 2026)
+- **NEW**: Auto-detect project i18n conventions (`detect-conventions.js`)
+- Detects 6 critical patterns: namespace, hook usage, sub-components, storage, schemas, key naming
+- 3-level detection: Fast Scan → Convention Detection → User Overrides
+- ALWAYS asks user for validation before applying detected conventions
+- Windows/macOS/Linux compatible (pure Node.js, no external dependencies)
+- Manual override support via `.claude/polyglot-conventions.md`
+- Added sub-component translation patterns (prop drilling, context)
+- Added Zod schema i18n patterns (factory functions)
+
+### v1.3.0 — LLM Compatibility (June 2026)
+- Added compatibility with Kimi, Qwen, Llama, Mistral, DeepSeek, Yi
+- Model-specific optimization notes
+- Fallback for `${CLAUDE_SKILL_DIR}` variable
+- Hook support documentation per LLM
+
+### v1.2.0 — Refactor Mode (June 2026)
+- **NEW**: Refactor mode for safe key/namespace renaming
+- 4-phase workflow: Impact Analysis → Preview → Apply → Validate
+- Risk levels (Low/Medium/High) with appropriate warnings
+- Orphaned reference detection in `validate-keys.js`
+
+### v1.1.0 — Create Mode (June 2026)
+- **NEW**: Create mode for setting up i18n from scratch
+- Library recommendation per framework
+- ESM + CommonJS examples for react-i18next and vue-i18n
+- Opinionated defaults with user override support
+
+### v1.0.0 — Initial Release (June 2026)
+- Migrate mode for surgical string migration
+- 8+ library support (next-intl, react-i18next, vue-i18n, etc.)
+- Auto-validation via Stop hook
+- Confidence-based detection
+
+---
+
 ## Contributing
 
 Fork → branch → change → PR. Areas that need help:
