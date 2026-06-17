@@ -194,32 +194,49 @@ polyglot/
 
 Polyglot includes a Python translation tool that generates translations for all locales from a source file. It supports multiple backends and preserves interpolation variables.
 
-### Setup
+### Setup (with uv - recommended)
+
+```bash
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Run the translation tool (uv handles Python + dependencies automatically)
+uv run scripts/translate.py --source pt --targets en,es
+```
+
+### Setup (with pip)
 
 ```bash
 pip install -r ~/.claude/skills/polyglot/scripts/requirements.txt
+python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en,es
 ```
 
 ### Usage
 
 ```bash
 # Translate pt → en, es (Google, free, no API key needed)
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en,es
+# Windows:
+scripts\translate.bat --source pt --targets en,es
+# Unix/macOS:
+./scripts/translate.sh --source pt --targets en,es
+
+# Or directly with uv:
+uv run scripts/translate.py --source pt --targets en,es
 
 # Use DeepL (requires DEEPL_API_KEY)
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en --backend deepl
+uv run scripts/translate.py --source pt --targets en --backend deepl
 
 # Use ChatGPT for context-aware translations (requires OPENAI_API_KEY)
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en --backend chatgpt
+uv run scripts/translate.py --source pt --targets en --backend chatgpt
 
 # Mark as draft for review
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en --draft
+uv run scripts/translate.py --source pt --targets en --draft
 
 # Dry run (preview without writing)
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en --dry-run
+uv run scripts/translate.py --source pt --targets en --dry-run
 
 # Validate after translation
-python ~/.claude/skills/polyglot/scripts/translate.py --source pt --targets en --validate
+uv run scripts/translate.py --source pt --targets en --validate
 ```
 
 ### Backends

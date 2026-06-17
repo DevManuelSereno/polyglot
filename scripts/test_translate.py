@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "deep-translator>=1.11.4",
+# ]
+# ///
 
 """
 Tests for translate.py
 
-Run with: python test_translate.py
+Run with: uv run test_translate.py
 """
 
 import json

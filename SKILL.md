@@ -217,29 +217,43 @@ Polyglot includes a Python translation tool (`scripts/translate.py`) that genera
 ### Setup
 
 ```bash
+# Install uv if you don't have it (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Run with uv (auto-installs Python + dependencies)
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
+
+# Or with pip
 pip install -r ${CLAUDE_SKILL_DIR}/scripts/requirements.txt
+python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
 ```
 
 ### Usage
 
 ```bash
-# Auto-detect locales dir, translate pt → en, es (Google, free)
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
+# With uv (recommended - auto-installs Python + dependencies)
+# Windows:
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.bat --source pt --targets en,es
+# Unix/macOS:
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.sh --source pt --targets en,es
+
+# Or directly:
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
 
 # Use DeepL (requires API key)
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --backend deepl --api-key YOUR_KEY
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --backend deepl --api-key YOUR_KEY
 
 # Use ChatGPT for context-aware translations
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es --backend chatgpt --api-key YOUR_KEY
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es --backend chatgpt --api-key YOUR_KEY
 
 # Mark as draft for review
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --draft
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --draft
 
 # Dry run (preview only)
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --dry-run
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --dry-run
 
 # Validate after translation
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --validate
+uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en --validate
 ```
 
 ### Backends

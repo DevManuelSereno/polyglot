@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "deep-translator>=1.11.4",
+# ]
+# ///
 
 """
 translate.py - i18n Translation Tool for Polyglot
@@ -7,11 +13,13 @@ Translates i18n JSON files from a source locale to multiple target locales.
 Supports multiple translation backends: Google (free), DeepL, ChatGPT.
 
 Usage:
+    # With uv (recommended - auto-installs dependencies)
+    uv run translate.py --source pt --targets en,es --dir locales/
+    uv run translate.py --source pt --targets en --backend deepl --api-key YOUR_KEY
+
+    # With pip
+    pip install deep-translator
     python translate.py --source pt --targets en,es --dir locales/
-    python translate.py --source pt --targets en --backend deepl --api-key YOUR_KEY
-    python translate.py --source pt --targets en,es,fr --backend chatgpt --api-key YOUR_KEY
-    python translate.py --source pt --targets en --dry-run
-    python translate.py --source pt --targets en --draft
 
 Requirements:
     pip install deep-translator
