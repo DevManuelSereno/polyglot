@@ -272,8 +272,19 @@ function validate(localesDir, sourceDir) {
 const localesDir = process.argv[2] || findLocalesDir();
 const sourceDir = process.argv[3] || findSourceDir();
 
+// Check for conventions file with remote storage
+const conventionsPath = path.join('.claude', 'polyglot-conventions.md');
+if (fs.existsSync(conventionsPath)) {
+  const conventionsContent = fs.readFileSync(conventionsPath, 'utf8');
+  const storageMatch = conventionsContent.match(/^storage:\s*(.+)$/m);
+  if (storageMatch && storageMatch[1].trim() === 'remote') {
+    // Remote storage: skip validation silently
+    process.exit(0);
+  }
+}
+
 if (!localesDir) {
-  console.log('No translation directories found (locales/, messages/, i18n/)');
+  // No translation directories found and no remote storage convention
   process.exit(0);
 }
 

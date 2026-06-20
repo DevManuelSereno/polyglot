@@ -237,6 +237,20 @@ This skill is designed to work effectively across different LLM architectures:
 5. **Examples** — Concrete before/after patterns work universally
 6. **Convention detection** — Adapts to project-specific patterns automatically
 
+## Performance
+
+| Operation | Time | Tokens |
+|-----------|------|--------|
+| Quick detection (cached) | ~0ms | ~0 |
+| Quick detection (first run) | ~100ms | ~200 |
+| Deep detection | ~1s | ~2k |
+| Migrate (10 strings) | ~5s | ~3k |
+| Refactor (low risk) | ~10s | ~5k |
+| Create (full setup) | ~30s | ~8k |
+| Translate (10 keys, 3 locales) | ~15s | ~4k |
+
+**With `skip-discovery: true`**: Phase 1 is skipped entirely, saving ~2-3k tokens and ~1-2s per session.
+
 ## Supported Agents & Tools
 
 Built on the [Agent Skills](https://agentskills.io) open standard:
