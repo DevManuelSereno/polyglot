@@ -33,6 +33,11 @@ When a string changes based on a count, use the pluralization mechanism detected
 - Always delegate plural logic to the i18n library.
 - If the reference module has pluralized keys, replicate the exact same pattern.
 
+**Plural categories differ per locale — check zero.** The CLDR rules decide which category a number falls in, and they are not the same everywhere: in English `0` is `other` ("0 files"), in Portuguese and French `0` is `one` ("0 arquivo"). When replacing `` `${n} files` `` with a plural message:
+- Compare with the old text for `0`, `1` and `2` in each locale.
+- If the old text used the plural for zero, add an exact match in the locales where `0` is `one`: `{count, plural, =0 {# arquivos} one {# arquivo} other {# arquivos}}`.
+- Check with `new Intl.PluralRules(locale).select(0)`.
+
 **Good/Bad:**
 - **Bad**: `count === 1 ? t('item.one') : t('item.other')` — fails for Arabic, Polish, Russian
 - **Good**: `t('items', { count })` — library handles all locale-specific plural rules
@@ -50,10 +55,58 @@ When a hardcoded string contains formatted values, use the formatting mechanism 
 **Rules:**
 - Do not format dates/numbers inline with `toLocaleDateString()` if the project has a formatting utility.
 - Follow the existing formatting pattern from the reference module exactly.
+- The locale is always the app's current one (`useLocale()`, the router), never a literal (`"pt-BR"`) and never omitted (that uses the browser's language).
+- `toFixed(n)` and `String(n)` are not formatting: they always use a dot. Use `Intl.NumberFormat(locale, { minimumFractionDigits: n, maximumFractionDigits: n })`.
+
+### next-intl: `useFormatter` needs a time zone
+
+`useFormatter().dateTime()` uses the `timeZone` configured for next-intl. Without one, next-intl reports `ENVIRONMENT_FALLBACK` and the server and the browser may format the same date in different time zones (hydration mismatches, a different day).
+
+Before recommending `useFormatter` for dates:
+1. Check for `timeZone` in `getRequestConfig` (server) **and** in the client provider (`NextIntlClientProvider timeZone=…`).
+2. If both are set, use `useFormatter`.
+3. If not, either propose configuring it as a **separate step** (it affects every date in the app — not part of migrating one screen), or keep `useLocale()` + `Intl.DateTimeFormat(locale)` / `toLocaleDateString(locale)`, which formats in the browser's time zone as before.
+4. Warn about date-only values (`"2025-12-15"`): `new Date("2025-12-15")` is midnight **UTC**, and with a fixed time zone users elsewhere may see the previous or next day. Parse date-only strings as local dates (`new Date(y, m - 1, d)`) or format them with `timeZone: "UTC"`.
+
+Numbers are not affected: `useFormatter().number()` needs no time zone.
 
 **Good/Bad:**
 - **Bad**: `new Date().toLocaleDateString('en-US')` — hardcoded locale, ignores user preference
 - **Good**: `formatter.dateTime(date)` — uses user's locale automatically
+
+## Date Input Fields
+
+A text field where users **type** a date needs more than a translated label: the mask, the parsing and the placeholder must follow the locale's order, or a user in `en-US` types `12/15/2025` and the field reads month 15.
+
+- **Order and separator from `Intl`**, not from a table: `new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(date)` gives `["month", "day", "year"]` and `/` for `en-US`, `.` for `de-DE`, `/` year-first for `ja-JP`, `. ` with a trailing `.` for `ko-KR`. A new locale then works without code.
+- **Latin digits, Gregorian calendar**: build the locale with `new Intl.Locale(locale, { calendar: "gregory", numberingSystem: "latn" })`, so Arabic or Thai locales still produce typeable digits; strip direction marks (`\u200e`, `\u200f`, `\u061c`).
+- **Reject impossible dates**: `new Date(2025, 1, 31)` silently becomes March 3. Rebuild the date and compare year, month and day.
+- **Display, mask and parse with the same pattern**: a field that displays with `Intl` but parses as day/month breaks in `en-US`.
+- **Placeholder from the pattern**, with only the letters translated (e.g. `dd`/`mm`/`yyyy`, `jj`/`mm`/`aaaa` in French) — not a fixed `"dd/mm/yyyy"` key per locale, and not an example date.
+- **Store** a locale-independent value (`YYYY-MM-DD`).
+
+A complete implementation, with no dependencies: [examples/date-input/localized-date.ts](examples/date-input/localized-date.ts) (`dateFieldFormat`, `toFieldText`, `applyMask`, `fromFieldText`, `fieldPlaceholder`).
+
+## Library Locale Maps
+
+Date pickers, `date-fns`, `dayjs`, phone inputs and similar libraries name locales with BCP 47 casing (`pt-BR`) or language only (`pt`), while routing often uses lowercase (`pt-br`). A direct lookup falls back to English without an error.
+
+- **Normalize** with `Intl.Locale`, then try the full tag and the language: `"pt-br"` → `["pt-BR", "pt"]` (`localeLookupKeys` in the date-input example).
+- **Load locale data with an explicit import map**, not a template path:
+
+```ts
+// Bad: bundlers may not expand it — Turbopack builds without error but ships one locale
+const mod = await import(`date-fns/locale/${code}`);
+
+// Good: one chunk per locale, each loaded on demand
+const DATE_FNS_LOCALES: Record<string, () => Promise<unknown>> = {
+	"pt-BR": () => import("date-fns/locale/pt-BR"),
+	"en-US": () => import("date-fns/locale/en-US"),
+	es: () => import("date-fns/locale/es"),
+};
+```
+
+- **Check the build output**: after building, confirm a chunk exists for each locale (search the build folder for a string unique to each locale, such as a month name). A locale missing from the map falls back to the default until it gets a line.
 
 ## Rich Text and Inline Components
 
@@ -190,6 +243,8 @@ export default function OrganizationForm() {
   // Use schema with react-hook-form, formik, etc.
 }
 ```
+
+In Migrate, only messages that reach the screen justify the factory; dead messages are removed instead. See [migrate.md](migrate.md#rule-3-migrate-a-validation-message-only-if-it-reaches-the-screen).
 
 **Rules:**
 - Schemas MUST receive `t` as parameter (never call hook directly in schema file)

@@ -44,7 +44,8 @@ Polyglot is a Claude Code / opencode skill that handles the full i18n lifecycle:
 - **No i18n yet?** → Creates it from scratch (library, config, provider, translation files)
 - **i18n exists?** → Surgically migrates hardcoded strings with minimal diffs
 - **Need to rename keys?** → Safely refactors with impact analysis and validation
-- **Need translations?** → Generates translations for all locales from a source file
+- **Need translations?** → Translates pending keys in every locale and reviews existing translations
+- **Translations in a bucket/CDN?** → Validates the local mirror, lists what to publish, compares the remote with it
 
 It auto-detects your project's state and routes to the right workflow. No manual configuration needed.
 
@@ -77,8 +78,9 @@ The skill uses `${CLAUDE_SKILL_DIR}` internally, which automatically resolves to
 # Force a mode
 /polyglot create
 /polyglot migrate src/Settings.tsx src/Profile.tsx
+/polyglot migrate "src/app/[locale]/(dashboard)/orders"   # quote App Router paths
 /polyglot refactor bloqueio block
-/polyglot translate --source pt --targets en,es,fr
+/polyglot translate pt-br → en-us, es-es
 ```
 
 Or just ask naturally: *"Add i18n to my app"*, *"Migrate strings in Settings.tsx"*, *"Rename bloqueio namespace to block"*, or *"Translate my locale files to English and Spanish"*
@@ -92,9 +94,10 @@ Or just ask naturally: *"Add i18n to my app"*, *"Migrate strings in Settings.tsx
 - Adds example component
 
 ### Migrate mode (i18n exists)
-- Finds hardcoded strings (labels, placeholders, aria-labels, tooltips, buttons)
-- Replaces with `t()` calls following existing patterns
-- Updates translation files or outputs keys for remote storage
+- Walks an 8-point checklist on the target and the shared components it imports: hardcoded text, where each file came from (copies of other projects), labels passed by prop, validation messages, numbers and dates, date inputs, locale codes passed to libraries ([migrate.md](migrate.md))
+- Replaces with `t()` calls following existing patterns; new keys carry the original text
+- Turns schemas into `createXSchema(t)` factories only for messages that reach the screen
+- Updates translation files (or the local mirror of a remote catalog) and tests that mock the i18n library
 - Validates automatically
 
 ### Refactor mode (rename keys/namespaces)
@@ -105,25 +108,29 @@ Or just ask naturally: *"Add i18n to my app"*, *"Migrate strings in Settings.tsx
 - Validates for orphaned references
 
 ### Translate mode (generate translations)
-- Translates locale files from source to multiple target languages
-- Supports 3 backends: Google (free), DeepL (API key), ChatGPT (API key)
-- Preserves `{interpolation}` variables automatically
-- Batch translation for performance
-- Draft marking for review workflows
-- Auto-validates with `validate-keys.js`
+- Lists pending translations (missing, empty, still identical to the source) with `pending-report.js`, as a Markdown report someone can also translate from
+- Claude translates in the files: only values change; `{variables}`, ICU plurals (including `=0` where a locale needs it) and brand names are preserved
+- Reviews existing translations in the same files and proposes fixes
+- Validates with `validate-keys.js`
+- Optional: bulk machine translation with `translate.py` (Google, DeepL, ChatGPT)
+
+### Remote catalogs (bucket/CDN with a local mirror)
+- One file per module and locale, namespace as the JSON root, fallback locale, tolerant catalog — guide in [remote.md](remote.md), example loader with next-intl wiring in [examples/remote-catalog/](examples/remote-catalog/)
+- `remote-check.js --since <ref>`: what to republish, including keys moved between modules
+- `remote-check.js --compare`: remote vs local mirror (missing files, different texts, invalid JSON)
 
 ### Convention Detection
-- Auto-detects namespace patterns, hook usage, sub-component patterns
-- Detects schema integration (Zod factory functions)
-- Detects storage type (local vs remote)
-- ALWAYS asks for user validation before applying
-- Supports manual overrides via `.claude/polyglot-conventions.md`
+- Samples the target first (App Router paths with `[locale]` and `(group)` included)
+- Finds locales in `messages/en.json`, `messages/en/*.json` and `messages/features/<module>/en.json`
+- Detects namespace depth and casing, translators passed to column/schema factories, `createXSchema(t)` factories and schemas with fixed messages
+- Detects storage from the runtime loader: local, remote, or remote with a local mirror
+- Asks for validation once; a `.claude/polyglot-conventions.md` counts as confirmed (no question, no subagent)
 
 ## What it does NOT do
 
 - Change component architecture or business logic
 - Modify files outside the requested scope
-- Set up translation management workflows (TMS)
+- Set up translation management workflows (TMS) or upload files to a bucket — the user publishes
 - Refactor non-i18n code (only renames i18n keys/namespaces)
 
 ## Supported libraries
@@ -142,11 +149,11 @@ Or just ask naturally: *"Add i18n to my app"*, *"Migrate strings in Settings.tsx
 ## How it works
 
 1. **Discover** — detects your i18n stack with confidence levels (High/Medium/Low)
-2. **Detect Conventions** — analyzes 10 files to extract namespace patterns, hook usage, sub-component patterns, schema integration
-3. **Validate** — presents detected conventions to user, asks for confirmation
+2. **Detect Conventions** — samples the target, then the project, to extract namespace patterns, hook usage, translators passed along, schema integration, storage
+3. **Validate** — presents detected conventions to user, asks for confirmation (skipped with a conventions file)
 4. **Route** — no i18n? → Create. Migrate strings? → Migrate. Rename keys? → Refactor. Generate translations? → Translate.
 5. **Execute** — follows the appropriate workflow (create/migrate/refactor/translate)
-6. **Validate** — auto-runs validation at end of turn (checks missing keys, orphaned references, variable consistency)
+6. **Validate** — the Stop hook checks the files changed in git (missing keys, keys used but not defined); the full check also lists orphans and dynamic keys
 7. **Respond** — structured summary with files changed, keys added/renamed/translated, validation status
 
 ## Before/after examples
@@ -161,25 +168,33 @@ polyglot/
 ├── discovery.md             # 3-level detection (fast scan → conventions → overrides)
 ├── conventions.md           # Auto-detection + manual override documentation
 ├── create.md                # Opinionated scaffolding per library
+├── migrate.md               # Migrate checklist (Phase 4) and rules (Phase 5)
 ├── refactor.md              # Safe refactoring with impact analysis
-├── patterns.md              # Interpolation, pluralization, sub-components, Zod schemas
+├── remote.md                # Remote catalog with a local mirror, publishing
+├── patterns.md              # Interpolation, plurals, formatting, date inputs, Zod schemas
 ├── examples.md              # Before/after for every library
 ├── agents/
 │   └── i18n-analyzer.md     # Deep analysis subagent
 ├── scripts/
-│   ├── package.json         # Node dependencies (js-yaml)
-│   ├── validate-keys.js     # Auto-validates translation files
+│   ├── package.json         # Node dependencies (js-yaml), Node ≥ 18
+│   ├── validate-keys.js     # Validates translation files and key usage in code
 │   ├── detect-conventions.js # Auto-detects project conventions
-│   ├── translate.py         # Multi-backend translation tool
+│   ├── remote-check.js      # What to republish; remote vs local mirror
+│   ├── pending-report.js    # Pending translations report
+│   ├── lib/i18n-project.js  # Shared helpers (layouts, locales, translators)
+│   ├── test/                # Node tests + fixtures
+│   ├── translate.py         # Optional machine translation (multi-backend)
 │   ├── test_translate.py    # Tests for translate.py
 │   ├── requirements.txt     # Python dependencies
 │   ├── translate.bat        # Windows wrapper
 │   └── translate.sh         # Unix wrapper
 ├── examples/
-│   └── conventions/         # Example convention files
-│       ├── next-intl-gcs.md
-│       ├── react-i18next-local.md
-│       └── vue-i18n-crowdin.md
+│   ├── conventions/         # Example convention files
+│   │   ├── next-intl-gcs.md
+│   │   ├── react-i18next-local.md
+│   │   └── vue-i18n-crowdin.md
+│   ├── remote-catalog/      # Remote catalog loader + next-intl wiring
+│   └── date-input/          # Date input in the locale's order
 ├── README.md
 └── LICENSE
 ```
@@ -194,13 +209,12 @@ polyglot/
 | Refactor impact too high | Warns user, suggests manual approach |
 | No i18n + user wants migrate | Suggests create first |
 | Translation files missing | Asks for storage method |
-| Translate: Python not installed | Guides user to install Python + dependencies |
-| Translate: API key missing | Asks for API key or suggests free backend |
-| Translate: variables lost | Auto-restores `{variables}` from source |
+| Translate: variables lost or ICU broken | Restores from source, re-validates |
+| translate.py (optional): Python or API key missing | Guides setup, or translates directly instead |
 
 ## Translation Tool
 
-Polyglot includes a Python translation tool that generates translations for all locales from a source file. It supports multiple backends and preserves interpolation variables.
+Optional. By default Claude translates in the files (Translate mode); this Python tool is for bulk machine translation when you ask for it. It supports multiple backends and preserves interpolation variables. Review its output like any translation.
 
 ### Setup (with uv - recommended)
 
@@ -275,7 +289,7 @@ This skill is designed to work effectively across different LLM architectures:
 - Detailed impact analysis for refactor mode
 
 **Efficient Models** (Qwen, Llama, Mistral):
-- Concise SKILL.md (287 lines) for minimal context usage
+- Concise SKILL.md (303 lines) with details in supporting files
 - Clear phase-based workflow for step-by-step execution
 - Structured output format for consistent responses
 
@@ -303,6 +317,7 @@ This skill is designed to work effectively across different LLM architectures:
   ```bash
   node ~/.claude/skills/polyglot/scripts/validate-keys.js
   ```
+  The hook runs it with `--hook` (changed files only, errors only, exit 2 to block).
 
 **Dynamic Context**: The `` !`command` `` syntax for auto-detection works in Claude Code and OpenAI Codex. For other LLMs, the skill will still work but may require manual context about your i18n setup.
 
@@ -351,9 +366,24 @@ No tool-specific dependencies. The validation script is plain Node.js.
 
 **Validation fails** — The skill auto-fixes missing keys. If it can't, it reports exactly which keys are missing in which files.
 
+**Keys reported as orphans but used** — Usage through a variable (`t(MAP[id])`) is listed as dynamic, not orphan. A translator the script cannot follow: `validate-keys.js --param tColumns=Page.Table.Columns`.
+
+**Remote storage and nothing validated** — Set `local-mirror` in `.claude/polyglot-conventions.md` to validate the files you prepare for upload.
+
 **Large files (20+ strings)** — Proposes batching by section, asks for scope confirmation.
 
 ## Recent Updates
+
+### v1.6.0 — Field-tested (November 2026)
+Lessons from migrating a real Next.js app, module by module, to a bucket-hosted catalog.
+- **Detection**: `--target` (App Router paths, mangled ones resolved by suffix), locales in locale folders and module folders, storage from the runtime loader (`remote-mirror`), namespace depth and casing, translators passed to factories, `createXSchema(t)` and fixed messages
+- **Validation** rewritten: every layout, follows translator variables, template keys, translators passed across files, dynamic keys; ICU arguments by name; `--namespace`, `--param`, `--changed`; Stop hook only blocks on errors in changed files
+- **Remote catalogs**: `remote.md`, an example loader, `remote-check.js` (republish list, moved keys, remote vs mirror)
+- **Migrate**: `migrate.md` checklist and rules — file origin, labels by prop, validation messages that reach the screen, `toFixed`/fixed locales, date inputs, library locale codes, shared components; new keys keep the original text
+- **Patterns**: `useFormatter` time-zone prerequisite, zero in ICU plurals per locale, date inputs, explicit locale import maps
+- **Translate**: Claude translates by default; `pending-report.js`; review of existing translations; `translate.py` optional
+- Conventions file counts as confirmed: no confirmation round-trip, no subagent
+- Node tests with fixtures in CI; Node ≥ 18
 
 ### v1.5.0 — Translation Tool (June 2026)
 - **NEW**: Python translation tool (`scripts/translate.py`) for generating locale translations

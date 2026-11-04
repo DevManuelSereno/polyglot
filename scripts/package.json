@@ -1,13 +1,15 @@
 {
   "name": "polyglot-scripts",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Polyglot i18n skill utility scripts",
   "type": "commonjs",
   "scripts": {
     "detect": "node detect-conventions.js",
     "detect:quick": "node detect-conventions.js --quick",
     "validate": "node validate-keys.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "remote-check": "node remote-check.js",
+    "pending": "node pending-report.js",
+    "test": "node --test test/"
   },
   "keywords": [
     "i18n",
@@ -21,6 +23,6 @@
     "js-yaml": "^4.1.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }

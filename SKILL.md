@@ -1,6 +1,6 @@
 ---
 name: polyglot
-version: 1.5.0
+version: 1.6.0
 description: >
   One skill for the entire i18n journey. Creates i18n from scratch, migrates
   hardcoded strings to translation calls, refactors existing i18n keys
@@ -35,7 +35,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "node ${CLAUDE_SKILL_DIR:-.claude/skills/polyglot}/scripts/validate-keys.js"
+          command: "node ${CLAUDE_SKILL_DIR:-.claude/skills/polyglot}/scripts/validate-keys.js --hook"
 ---
 
 # Polyglot
@@ -65,7 +65,8 @@ node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --quick
 3. i18n exists + user wants migrate → **Migrate**
 4. i18n exists + user wants rename/refactor → **Refactor**
 5. i18n exists + user wants translations → **Translate**
-6. User passed explicit mode → follow it
+6. User wants to move translations to a bucket/CDN, or storage is `remote-mirror` → follow [remote.md](remote.md) alongside the mode
+7. User passed explicit mode → follow it
 
 ## Scope Rules
 
@@ -80,6 +81,9 @@ node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --quick
 - Do not refactor or modernize
 - Do not alter business logic
 - Do not touch unrelated lines
+- A new key carries the **original text**, exactly; text fixes are a separate, approved decision
+- Exception: a schema may become a `createXSchema(t)` factory when a message that reaches the screen must be translated ([migrate.md](migrate.md#rule-2-schema-factories-are-allowed))
+- Copied/vendored files: check where a file came from **before** proposing a change; editing a copy is a divergence the user decides
 
 ### Refactor
 - **Impact analysis is mandatory** before any change
@@ -88,44 +92,45 @@ node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --quick
 - Report all cross-module dependencies
 
 ### Translate
-- Always preserve `{interpolation}` variables from source
-- Mark machine translations as draft unless user confirms otherwise
-- Use `--validate` to check consistency after translation
-- Prefer free backends (Google) unless user requests higher quality
+- Claude translates directly in the translation files; `translate.py` is optional (only when the user asks for a machine-translation backend)
+- Only values change: never rename, add or remove keys
+- Always preserve `{interpolation}` variables and ICU syntax from source
+- Fixing an existing translation is a proposal; apply after approval
 
 ## Workflow
 
 ### Phase 1: Discover
 
+Load this skill at the start of every target (each module, page or batch), not only the first one: the checklists below are what catch the strings a quick scan misses.
+
 **Step 1: Check for conventions file**
-- Look for `.claude/polyglot-conventions.md` in project root
-- If exists AND contains `skip-discovery: true`:
-  - Load all conventions from file
-  - **Skip Steps 2-5 entirely**
-  - Go directly to Phase 2 (Route)
-- If not exists OR `skip-discovery: false`:
-  - Proceed to Step 2
+- The Project Context above reports it (`conventions`). The file is `.claude/polyglot-conventions.md`.
+- If it exists, its conventions are **already confirmed**:
+  - Load them; they override anything detected
+  - Do **not** ask for confirmation and do **not** invoke `/i18n-analyzer`
+  - With `skip-discovery: true`, skip Steps 2-4 and go to Phase 2
+  - Without it, run Step 3 on the target only, to read its local patterns
+- If it does not exist, proceed to Step 2
 
-**Step 2: Fast Scan** (only if no skip)
-- Run `node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --quick`
-- Output: library, storage, locales (~200 tokens)
+**Step 2: Fast Scan**
+- The Project Context above already ran `detect-conventions.js --quick`: library, locales, layouts, storage (~200 tokens)
 
-**Step 3: Convention Detection** (only if no skip)
-- Run `node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js` (deep mode)
-- Analyze 10 files for patterns (~2k tokens)
+**Step 3: Convention Detection**
+- Run `node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --target "<target>"`
+- **Quote the target**: App Router paths (`src/app/[locale]/(group)/page`) lose their segments otherwise. If the argument reached you mangled (e.g. `/vehicle`), the script still resolves it by suffix and warns.
+- The target's files are sampled first (including column/schema factories that receive a translator), then the sample is filled from across the project
+- Reports: namespace depth with root and leaf casing, hook usage (call the hook / receive a translator / pass one along), schemas (`createXSchema(t)` factories and schemas with fixed messages to review), storage
 
-**Step 4: Load User Overrides** (only if no skip)
-- Read `.claude/polyglot-conventions.md` if exists
-- Merge with detected conventions (user overrides take priority)
+**Step 4: Present to User** (only without a conventions file)
+- Show detected conventions and ask: "Do these conventions match your project? [Y/n/edit]"
+- Offer to save `.claude/polyglot-conventions.md` so future runs skip this step
 
-**Step 5: Present to User** (only if no skip)
-- Show detected conventions
-- Ask: "Do these conventions match your project? [Y/n/edit]"
-- If user confirms: proceed to Phase 2
-- If user edits: update conventions, proceed to Phase 2
-- Offer to save `.claude/polyglot-conventions.md` for future sessions
+Low confidence and no conventions file → invoke `/i18n-analyzer`. If you already gathered the context in this session, present it instead of re-running the analysis.
 
-Low confidence → invoke `/i18n-analyzer`.
+**Storage types** (from detection or the conventions file):
+- `local` — translation files live in the repo; edit them
+- `remote` — fetched at runtime (bucket, TMS); output keys/JSON for the user to upload
+- `remote-mirror` — remote, plus local files in the repo that mirror what is published (fallback or files prepared for upload). Edit and **validate the local mirror**; the user publishes
 
 ### Phase 2: Route
 
@@ -157,34 +162,76 @@ Follow [refactor.md](refactor.md):
 
 ### Phase 3D: Translate
 
-1. Detect source locale and translation file structure
-2. Ask user for target locales (if not specified)
-3. Ask user for backend preference (google/deepl/chatgpt)
-4. Run `python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source <locale> --targets <locales> --dir <dir> --validate`
-5. Review output, fix any issues
+1. Detect the source locale (the most complete one) and the files; ask for target locales if not specified
+2. List what is pending:
+   ```bash
+   node ${CLAUDE_SKILL_DIR}/scripts/pending-report.js --source <locale> [--module <m>] [--same "ID,Total"]
+   ```
+   Missing, empty, or still identical to the source. Texts that are genuinely the same in both languages go in `--same`
+3. **Translate** the pending values in each target file:
+   - keep `{variables}`, `#` and the plural/select structure; translate only the text inside options
+   - check plural categories per target locale (`=0` where needed, see [patterns.md](patterns.md#pluralization))
+   - do not translate brand/product names or native language names
+   - follow the terms already used in the same file and in the project's other modules (glossary); reuse an existing translation of the same source text
+   - short interface tone
+4. **Review existing translations** in the same files while there — report, do not silently change:
+   - wrong term (e.g. "Seriousness" for severity), text still in another language, typos, inconsistent terms across modules, capitalization out of the file's style
+   - propose each fix with key, current and suggested text; apply what the user approves
+5. **Validate**: `validate-keys.js --namespace <NS>` (same keys, same ICU arguments in every locale) and `pending-report.js` again; when the project has an ICU parser (`intl-messageformat`), parse every changed message
+6. Remote storage: list the files to publish (`remote-check.js --since <ref>`)
+
+**Optional — machine translation backend**: if the user asks for bulk machine translation, `python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source <locale> --targets <locales> --dir <dir> --draft --validate` (Google/DeepL/ChatGPT). Review its output with steps 4–5.
 
 ### Phase 4: Identify (Migrate only)
 
-Find: labels, placeholders, errors, aria-labels, tooltips, buttons.
-Exclude: constants, logs, identifiers, CSS, data attributes.
+Walk the full checklist in [migrate.md](migrate.md#phase-4-identify) on the target **and on the shared components it imports**:
+
+1. Hardcoded text: labels, placeholders (example dates included), errors, aria-labels, tooltips, buttons, toasts, fallbacks like `t("x") || "Text"`
+2. Where each file came from (copy of another project or UI library?) — before proposing anything
+3. Components with label props: does the consumer pass every label?
+4. Validation messages: library defaults leaking in its language, fixed messages, and which ones reach the screen
+5. Numbers, dates, currency: `toFixed`, `String(n)`, fixed-locale `toLocale*`/`Intl`
+6. Date input fields: mask, parsing and placeholder in the locale's order
+7. Locale codes passed to libraries (`pt-br` vs `pt-BR`)
+8. Shared components imported by the target
+
+Exclude: constants, logs, identifiers, CSS, data attributes, API field names, brand names.
+Present findings with a proposed decision each; apply after approval.
 
 ### Phase 5: Apply Patterns (Migrate only)
 
-Follow [patterns.md](patterns.md): interpolation, pluralization, formatting, rich text.
-Smallest change only: replace strings, add hook/import if absent.
+Follow [patterns.md](patterns.md): interpolation, pluralization, formatting, rich text, date inputs.
+Smallest change only: replace strings, add hook/import if absent. Rules in [migrate.md](migrate.md#phase-5-rules): original text in the new key, schema factories only for messages that reach the screen, update tests that mock the i18n library.
 
 ### Phase 6: Update Translations (All modes except Create)
 
-- **Local**: Run `python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source <locale> --targets <locales> --dir <dir> --validate`
-  - Supports backends: `google` (free, default), `deepl` (API key), `chatgpt` (API key)
-  - Preserves `{variables}` in translations automatically
-  - Use `--draft` to mark output for review
-  - Use `--dry-run` to preview without writing files
-- **Remote**: Output keys for user to upload to TMS
+- **New keys go to every locale**: the source text in the source locale and, until translated, the same source text in the other locales (the catalog stays complete; nothing breaks at runtime)
+- Then either translate now (Phase 3D, if the user wants) or hand over the pending list: `pending-report.js --source <locale> --output <file>` writes a Markdown report with instructions that someone else can translate from
+- Tests that mock the i18n library with labels: add the new keys ([migrate.md](migrate.md#rule-4-tests-that-mock-the-i18n-library))
+- **Local**: edit the translation files
+- **Remote with local mirror** (`remote-mirror`): edit and validate the mirror files; the user publishes. List what to publish with `node ${CLAUDE_SKILL_DIR}/scripts/remote-check.js --since <ref>` (including keys moved between modules: publish both, the receiving one first), and after publishing compare with `--compare`. See [remote.md](remote.md)
+- **Remote** (no mirror): output keys/JSON for the user to upload to the TMS or bucket
 
 ### Phase 7: Validate
 
-Auto-runs via Stop hook. Fix errors → re-validate.
+The Stop hook runs `validate-keys.js --hook`: only files changed in git, errors only (missing keys in a locale, keys used in code but missing from the catalog). Fix errors → re-validate.
+
+Before reporting, run the full check on the target's namespaces:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/validate-keys.js --namespace <Namespace>
+```
+
+- Reads every local layout (`messages/en.json`, `messages/en/*.json`, `messages/features/<module>/en.json`) and, for remote storage, the `local-mirror`
+- Follows each translator variable, template keys (`t(`status.${s}`)`) and translators passed to column/schema factories
+- **Orphans** are keys not found in code: list them, do not delete without the user's approval
+- **Dynamic** namespaces (`t(variable)`, `t(MAP[id])`) are not orphans: check by hand which keys the variable can take
+- A translator the script cannot resolve: `--param tColumns=Page.Table.Columns`
+
+Also:
+- **Tests are not validation**: screen tests often mock the i18n library with their own labels, so a missing key still passes them. The validator skips test files on purpose
+- **Format only the files you changed**: pass the file list to the formatter (`biome format --write <files>`, `prettier --write <files>`), never a folder — it reformats files outside the task
+- Run the project's type check and build when the task touched code (schemas, props)
 
 ### Phase 8: Respond
 
@@ -198,7 +245,7 @@ Changes:
 - [create] created i18n config with [library]
 - [migrate] migrated N strings
 - [refactor] renamed X keys across Y files
-- [translate] translated N keys to M locales using [backend]
+- [translate] translated N keys to M locales; K existing translations flagged for review
 
 Validation: ✓ passed / ✗ failed (see errors above)
 
@@ -211,6 +258,7 @@ Notes:
 1. Check reference for equivalent keys
 2. Check target (may be partially migrated)
 3. Reuse when semantically equivalent
+4. With a remote catalog, moving a key to another module (e.g. into `common`) means republishing both modules — say so and list them (`remote-check.js --since`)
 
 **Good**: `profile.header.title`, `profile:header.title`
 **Bad**: `title`, `headerText`, `page.content.section.label.text`
@@ -229,59 +277,27 @@ Batch by section. Ask scope. One batch at a time.
 | Refactor impact too high | Abort, suggest manual approach |
 | Create: user disagrees with library choice | Respect user's choice |
 | Refactor: 0 usages found | Abort — target doesn't exist |
-| Translate: Python not installed | Guide user to install Python + `pip install deep-translator` |
-| Translate: API key missing | Ask user for API key or suggest free backend |
-| Translate: variables lost | Auto-restore `{variables}` from source |
+| Translate: variables lost or ICU broken | Restore from source; re-run `validate-keys.js` |
+| Translate: text identical to source | Translate, or add to `--same` if genuinely the same |
+| translate.py (optional): Python or API key missing | Guide setup (`uv run`, or `pip install -r scripts/requirements.txt`), or translate directly instead |
 
-## Translation Tool
+## Optional: Machine Translation Tool
 
-Polyglot includes a Python translation tool (`scripts/translate.py`) that generates translations for all locales from a source file.
-
-See [scripts/translate.py](scripts/translate.py) for full documentation, or run:
-```bash
-uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --help
-```
-
-### Quick Start
-
-```bash
-# Install uv if you don't have it (recommended)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Run with uv (auto-installs Python + dependencies)
-uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
-
-# Or with pip
-pip install -r ${CLAUDE_SKILL_DIR}/scripts/requirements.txt
-python ${CLAUDE_SKILL_DIR}/scripts/translate.py --source pt --targets en,es
-```
-
-### Backends
-
-| Backend | Quality | Cost | API Key |
-|---------|---------|------|---------|
-| `google` | Good | Free | Not required |
-| `deepl` | Excellent | Free tier (500k chars/mo) | `DEEPL_API_KEY` |
-| `chatgpt` | Best (context-aware) | Paid | `OPENAI_API_KEY` |
-
-### Features
-
-- Preserves `{interpolation}` variables across translations
-- Batch translation for performance
-- Draft marking for review workflows (`--draft`)
-- Auto-validates with `validate-keys.js` (`--validate`)
-- Nested JSON structure preservation
-- Dry-run mode (`--dry-run`)
+`scripts/translate.py` translates whole files through Google (free), DeepL or ChatGPT, preserving `{variables}`. It is not part of the default flow: use it only when the user asks for bulk machine translation, with `--draft`, and review the result as in Phase 3D steps 4–5. Setup and options: `uv run ${CLAUDE_SKILL_DIR}/scripts/translate.py --help`, or [README.md](README.md#translation-tool).
 
 ## Resources
 
 - [discovery.md](discovery.md) — Detection + routing
 - [conventions.md](conventions.md) — Auto-detection + manual override
 - [create.md](create.md) — Scaffolding per library
+- [migrate.md](migrate.md) — Migrate checklist (Phase 4) and rules (Phase 5)
 - [refactor.md](refactor.md) — Safe refactoring with impact analysis
+- [remote.md](remote.md) — Remote catalog (bucket/CDN) with a local mirror, moving from local, publishing
+- [scripts/remote-check.js](scripts/remote-check.js) — What to republish; remote vs mirror comparison
 - [patterns.md](patterns.md) — Interpolation, pluralization, Good/Bad
 - [examples.md](examples.md) — Before/after for every library
 - [agents/i18n-analyzer.md](agents/i18n-analyzer.md) — Deep analysis subagent
-- [scripts/translate.py](scripts/translate.py) — Translation tool (multi-backend)
+- [scripts/pending-report.js](scripts/pending-report.js) — Pending translations report
+- [scripts/translate.py](scripts/translate.py) — Optional machine translation (multi-backend)
 - [scripts/validate-keys.js](scripts/validate-keys.js) — Key validation
 - [scripts/detect-conventions.js](scripts/detect-conventions.js) — Convention detection

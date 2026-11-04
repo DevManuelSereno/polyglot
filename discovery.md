@@ -9,8 +9,8 @@ Detect the project's i18n stack and determine the appropriate mode.
 Quick detection of basic stack information:
 
 1. **Detect i18n Library** — search for imports and config files
-2. **Detect Translation Storage** — local files vs remote config
-3. **Detect Locales** — from config or file names
+2. **Detect Translation Storage** — local, remote, or remote with a local mirror
+3. **Detect Locales** — from file and folder names, in any of the three layouts
 
 **Output**: Library, storage type, available locales
 
@@ -31,6 +31,8 @@ Deep analysis of existing patterns using `detect-conventions.js`:
 Load manual conventions from `.claude/polyglot-conventions.md` if exists.
 
 **Priority**: User overrides > Detected conventions > Defaults
+
+A conventions file means the conventions are already confirmed: no confirmation round-trip and no `/i18n-analyzer`.
 
 ---
 
@@ -57,15 +59,19 @@ Search for imports and config files:
 
 Search for translation files:
 
-- **Local files**: glob for `**/*.json`, `**/*.yaml`, `**/*.yml`, `**/*.po`, `**/*.properties` inside `locales`, `messages`, `i18n`, `lang`, `translations`, `public`
-- **Config files**: `i18n.config.*`, `i18next.config.*`, `next-intl.config.*`, `lingui.config.*`
-- **CMS/remote**: if no local files found, ask user
+- **Local files**: `*.json`, `*.yaml`, `*.yml`, `*.po`, `*.properties` inside `locales`, `messages`, `i18n`, `lang`, `translations`, `public/locales` (also under `src/`), in three layouts:
+  - `flat` — `messages/en.json`
+  - `locale-dir` — `messages/en/common.json`
+  - `module-dir` — `messages/features/<module>/en.json`, with the namespace as the JSON root
+- **Remote**: the runtime loader (`getRequestConfig`, i18next backend, `createI18n`…) or a local module it imports fetches translations (bucket URL, TMS SDK). Unused files are ignored.
+- **Remote with local mirror** (`remote-mirror`): both. The local files are a fallback or the files prepared for upload; they are validated like local files.
+- **Nothing found**: ask user
 
-**Confidence**: High if files found, Low if only config found, None if nothing found
+**Confidence**: High when a loader is found, Medium from files or config only
 
 ### 3. Detect Locales
 
-From config files or translation file names: `en`, `en-US`, `pt-BR`, etc.
+From translation file or folder names, case-insensitive: `en`, `en-US`, `pt-BR`, `pt-br`, `zh-Hant`, `es-419`.
 
 **Confidence**: High if config found, Medium if file names only
 
@@ -73,30 +79,32 @@ From config files or translation file names: `en`, `en-US`, `pt-BR`, etc.
 
 ## Level 2: Convention Detection
 
-Run `detect-conventions.js` to analyze 10 files (default) with existing i18n usage.
+Run `detect-conventions.js` on the target (quoted). Its files are sampled first, then at least 10 files from across the project.
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js
+node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js --target "src/app/[locale]/(dashboard)/orders"
 ```
 
 ### What Gets Detected
 
 1. **Namespace Pattern**
-   - Separator: dot (`.`), colon (`:`), slash (`/`), underscore (`_`)
-   - Depth: 1 (flat), 2 (namespace.key), 3+ (Module.Component.key)
-   - Casing: camelCase, PascalCase, snake_case, kebab-case
+   - Separator: dot (`.`) or colon (`:`)
+   - Depth of the full key (the `useTranslations` namespace plus the key): 1 (flat), 2 (namespace.key), 3+ (Namespace.Section.key)
+   - Casing of roots (e.g. `OrdersPage`) and of leaves (e.g. `saveButton`)
 
 2. **Hook Usage**
    - Direct: Components call `useTranslations()` directly
-   - Prop drilling: Components receive `t` as prop
+   - Received: helpers, column factories or schema factories receive a translator (`tColumns: TFunction`)
+   - Passed: components pass their translator along
 
 3. **Sub-Component Pattern**
    - How child components access translations
    - Critical for avoiding runtime errors
 
 4. **Schema Integration**
-   - Zod/Yup factory functions: `createSchema(t)`
-   - Inline usage: schema calls `t()` directly
+   - Factory functions: `createXSchema(t)`
+   - Fixed messages (`.max(10, "Too long")`, `message: "…"`): candidates to migrate, only if they reach the screen
+   - No messages: nothing to migrate
 
 5. **Key Naming**
    - Casing convention for leaf keys
@@ -130,7 +138,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/detect-conventions.js
 | **Medium** | 60-79% match | Review with user |
 | **Low** | <60% or <5 samples | Ask user for clarification |
 
-**Important**: ALWAYS present detected conventions to user for validation, regardless of confidence level.
+**Important**: Without a conventions file, present detected conventions to the user for validation, regardless of confidence level. With one, use it without asking.
 
 ---
 
@@ -178,7 +186,7 @@ If any detection step fails:
 
 **Mode**: [create|migrate|refactor]
 **Library**: [name] (confidence: High/Medium/Low)
-**Storage**: [local/remote/hybrid] (confidence: High/Medium/Low)
+**Storage**: [local/remote/remote-mirror] (confidence: High/Medium/Low)
 
 **Detected Conventions**:
 - Namespace: [pattern] (confidence: High/Medium/Low)

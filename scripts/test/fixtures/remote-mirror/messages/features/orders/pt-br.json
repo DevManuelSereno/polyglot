@@ -1,0 +1,1 @@
+{ "OrdersPage": { "title": "Pedidos", "status": { "open": "Aberto", "closed": "Fechado" }, "Table": { "Columns": { "number": "Número", "total": "Total" } }, "Form": { "validation": { "quantity": "No máximo {max}" } } } }

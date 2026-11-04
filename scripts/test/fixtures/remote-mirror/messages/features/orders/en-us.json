@@ -1,0 +1,1 @@
+{ "OrdersPage": { "title": "Orders", "status": { "open": "Open", "closed": "Closed" }, "Table": { "Columns": { "number": "Number", "total": "Total" } }, "Form": { "validation": { "quantity": "At most {max}" } } } }

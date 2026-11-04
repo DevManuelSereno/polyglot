@@ -37,6 +37,28 @@ skip-discovery: true
 ---
 ```
 
+### Example: Next.js + next-intl + bucket with a local mirror
+
+The app fetches one file per module from a bucket; the repo keeps the same files in `messages/features/<module>/<locale>.json` (fallback and files prepared for upload). Validation runs on the mirror.
+
+```yaml
+---
+library: next-intl
+hook: useTranslations("Namespace")
+storage: remote
+remote-provider: gcs
+remote-url: https://storage.googleapis.com/my-bucket
+remote-path: my-app/features/{module}/{locale}.json
+local-mirror: messages/features
+fallback-locale: en-us
+key-casing: camelCase
+namespace-pattern: Namespace.Section.key
+sub-components: direct
+locales: pt-br, en-us, es-es
+skip-discovery: true
+---
+```
+
 ### Example: React + react-i18next + Local JSON
 
 ```yaml
@@ -71,13 +93,17 @@ skip-discovery: true
 ### Required Fields for Skip
 
 - `library` — which i18n library (next-intl, react-i18next, vue-i18n, etc.)
-- `storage` — `local` or `remote`
+- `storage` — `local` or `remote`; `remote` plus `local-mirror` means remote with a validated local mirror
 - `skip-discovery: true` — flag to skip Phase 1
 
 ### Optional Fields
 
 - `hook` — how translations are accessed (e.g., `useTranslations("namespace")`)
 - `remote-provider` — gcs, s3, crowdin, lokalise, phrase, etc.
+- `local-mirror` — folder with the local copy of the remote files (e.g. `messages/features`). Keeps validation on for remote storage
+- `remote-url` — base URL of the bucket/CDN, used by `remote-check.js --compare`
+- `remote-path` — path pattern of a published file, e.g. `app/features/{module}/{locale}.json`
+- `fallback-locale` — locale loaded when a module lacks the requested one (see [remote.md](remote.md))
 - `key-casing` — camelCase, snake_case, kebab-case, PascalCase
 - `namespace-pattern` — flat, nested, module.section.key
 - `sub-components` — direct or prop-drilling
@@ -187,7 +213,7 @@ Analyzes leaf keys in translation files to determine casing convention.
 | **Medium** | 60-79% match | Review before using |
 | **Low** | <60% match or insufficient data | Ask user for clarification |
 
-**Note**: The skill ALWAYS asks for user validation before applying detected conventions, regardless of confidence level.
+**Note**: Without a conventions file, the skill asks for validation before applying detected conventions, regardless of confidence level. A conventions file counts as confirmed conventions: no question, no `/i18n-analyzer`.
 
 ---
 
@@ -204,8 +230,8 @@ The Polyglot skill uses these conventions in:
 ```
 1. User runs: /polyglot migrate src/components/Settings.tsx
 2. Skill runs: detect-conventions.js
-3. Skill presents: Detected conventions + asks for validation
-4. User confirms: Y / n / edit
+3. Skill presents: Detected conventions + asks for validation (skipped when .claude/polyglot-conventions.md exists)
+4. User confirms: Y / n / edit — and saves the conventions file
 5. Skill applies: Validated conventions to migration
 ```
 

@@ -10,7 +10,7 @@ on:
 # Jobs: o que vamos fazer?
 jobs:
   validate:
-    name: Validate Scripts
+    name: CI
     runs-on: ubuntu-latest
     
     steps:
@@ -29,6 +29,13 @@ jobs:
         run: |
           node --check scripts/detect-conventions.js
           node --check scripts/validate-keys.js
+          node --check scripts/remote-check.js
+          node --check scripts/pending-report.js
+          node --check scripts/lib/i18n-project.js
+
+      # Step 3b: Testar os scripts Node contra as fixtures
+      - name: Run Node tests
+        run: node --test scripts/test/
       
       # Step 4: Configurar Python
       - name: Setup Python
