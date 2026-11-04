@@ -1,6 +1,6 @@
 ---
 name: polyglot
-version: 1.6.0
+version: 1.6.0 # x-release-please-version
 description: >
   One skill for the entire i18n journey. Creates i18n from scratch, migrates
   hardcoded strings to translation calls, refactors existing i18n keys

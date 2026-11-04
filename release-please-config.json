@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "89ef2c248376926615213262d9a3b63626f18c3e",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "polyglot",
+      "include-component-in-tag": false,
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "revert", "section": "Reverts" },
+        { "type": "refactor", "section": "Refactoring", "hidden": true },
+        { "type": "test", "section": "Tests", "hidden": true },
+        { "type": "ci", "section": "CI", "hidden": true },
+        { "type": "chore", "section": "Chores", "hidden": true }
+      ],
+      "extra-files": [
+        { "type": "generic", "path": "SKILL.md" },
+        { "type": "json", "path": "scripts/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}
