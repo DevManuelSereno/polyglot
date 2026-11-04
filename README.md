@@ -374,6 +374,8 @@ No tool-specific dependencies. The validation script is plain Node.js.
 
 ## Recent Updates
 
+Full history in [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/DevManuelSereno/polyglot/releases).
+
 ### v1.6.0 — Field-tested (November 2026)
 Lessons from migrating a real Next.js app, module by module, to a bucket-hosted catalog.
 - **Detection**: `--target` (App Router paths, mangled ones resolved by suffix), locales in locale folders and module folders, storage from the runtime loader (`remote-mirror`), namespace depth and casing, translators passed to factories, `createXSchema(t)` and fixed messages
@@ -416,7 +418,7 @@ Lessons from migrating a real Next.js app, module by module, to a bucket-hosted 
 
 ## Contributing
 
-Fork → branch → change → PR. Areas that need help:
+Fork → branch → change → PR. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`…): releases, the version and `CHANGELOG.md` are generated from them by [release-please](https://github.com/googleapis/release-please). Areas that need help:
 - More library examples (Solid, Qwik, Astro)
 - Additional validation rules
 - README translations
